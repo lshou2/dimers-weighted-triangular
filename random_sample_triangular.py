@@ -31,7 +31,7 @@ def rectangle_bool(n,i,j):
         return True
     return False
 
-def kasteleyn_tri21_lil(n, shape_bool, weightlist=[1]*6, dtype=float):
+def kasteleyn_triangular_2x1_lil(n, shape_bool, weightlist=[1]*6, dtype=float):
     '''    
     Create the Kasteleyn matrix for the triangular lattice with 2x1 periodic
     edge weights given by 'weightlist', where the edge order is
@@ -39,7 +39,7 @@ def kasteleyn_tri21_lil(n, shape_bool, weightlist=[1]*6, dtype=float):
 
     Output is a sparse lil_array.
     
-    Same as construction from 'kasteleyn_triangular' but uses lil_array
+    Same as construction from 'kasteleyn_triangular' but outputs lil_array
     '''
         
     shape_coord = shape_coord_from_bool(n, shape_bool)
@@ -103,7 +103,7 @@ def random_covering(n, shape_bool, weights=[1]*6):
     
     Not recommended for larger sizes or repeated samples.
     '''
-    kmat = kasteleyn_tri21_lil(n,shape_bool,weights) # lil_array is faster
+    kmat = kasteleyn_triangular_2x1_lil(n,shape_bool,weights) # lil_array is faster
     
     msize = num_vertices(n, shape_bool)
     shape_coord = shape_coord_from_bool(n, shape_bool)
@@ -125,7 +125,8 @@ def random_covering(n, shape_bool, weights=[1]*6):
                             
                             if cover[mvertex,index] != 0: # not a deleted edge
                                 standard_basis_v = np.transpose(np.eye(1, msize, mvertex))
-                                cprob[index] = np.abs(kmat[mvertex,mneighbor]*(lusolver.solve(standard_basis_v))[mneighbor,0])
+                                cprob[index] = np.abs(kmat[mvertex,mneighbor]*\
+                                                      (lusolver.solve(standard_basis_v))[mneighbor,0])
 
                     if np.sum(cprob) < 0.99: # shouldn't ever be an issue
                         print(np.sum(cprob),cprob)
