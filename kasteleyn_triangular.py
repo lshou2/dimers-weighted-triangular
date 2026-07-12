@@ -171,7 +171,7 @@ def triangle_string(n, pathlength, vert=True, colshift=0):
 
 #%% vison and dimer functions
 
-def kinv_lu_sparse_large(n, kmatsparse, shape_coord, matcoords, verbose=True):
+def kinv_lu_sparse_large(n, kmatsparse, matcoords, verbose=True):
     ''' 
     Return the small K^{-1} matrix according to the matrix indices in 'matcoords'
     using sparse LU floating point method. 
@@ -187,25 +187,25 @@ def kinv_lu_sparse_large(n, kmatsparse, shape_coord, matcoords, verbose=True):
     if verbose:
         print("Computed sparse LU factorization in %.2f seconds"% (t1-t0))
     
-    kinvsmall = np.zeros((Asize,Asize),dtype=float)
+    Kinv_small = np.zeros((Asize,Asize),dtype=float)
     for index in range(Asize):
         standard_basis_v = np.transpose(np.eye(1, ksize, matcoords[index]))
-        kinvsmall[:,index] = (lusolver.solve(standard_basis_v))[matcoords,0]
+        Kinv_small[:,index] = (lusolver.solve(standard_basis_v))[matcoords,0]
     
-    return kinvsmall
+    return Kinv_small
 
 
-def vison_large(n, ksmall, kinvsmall, length=None):
+def vison_large(n, K_small, Kinv_small, length=None):
     '''
     Calculate visons along a path (formiing a zigzag pattern in the edges 
                                    crossed) in the triangular lattice.
     
-    The vertex order for 'ksmall' and 'kinvsmall' must be the order of vertices
+    The vertex order for 'K_small' and 'Kinv_small' must be the order of vertices
     in the zigzag (viewing the zigzag shape itself as the 'path' here)
     
     Note: This actually calculates vison correlator at face distance 'length-1'
     '''
-    ksmallsize = np.shape(ksmall)[0]
+    ksmallsize = np.shape(K_small)[0]
     if length == None:
         size = ksmallsize
     else:
@@ -213,30 +213,30 @@ def vison_large(n, ksmall, kinvsmall, length=None):
     
     # Create ksmalledges, which only has nonzero entries for edges in the path
     # note this is not the diagonal for non-bipartite indexing
-    kse = ksmalledges(n, ksmall)
+    kse = ksmalledges(n, K_small)
     
-    val = np.linalg.det(np.eye(size) - 2*kinvsmall[:size,:size] @ kse[:size,:size])
+    val = np.linalg.det(np.eye(size) - 2*Kinv_small[:size,:size] @ kse[:size,:size])
     
     # optional check
     assert val >-10**-15, 'Needs to be >0, received %s'%str(val)
     
     return np.sqrt(np.abs(val))
 
-def ksmalledges(n, ksmall, dtype=float):
+def ksmalledges(n, K_small, dtype=float):
     '''
     Return small matrix K|_{path} used in calculating the vison correlator.
     It is a small matrix K but only edges in the path are represented as nonzero.
     '''
-    size = np.shape(ksmall)[0]
+    size = np.shape(K_small)[0]
     ksmall_mat = np.zeros((size,size), dtype=dtype)
     for vindex in range(size-1):
         ## connect to neighbor
-        ksmall_mat[vindex, vindex+1] = ksmall[vindex, vindex+1]
-        ksmall_mat[vindex+1, vindex] = ksmall[vindex+1, vindex]
+        ksmall_mat[vindex, vindex+1] = K_small[vindex, vindex+1]
+        ksmall_mat[vindex+1, vindex] = K_small[vindex+1, vindex]
     return ksmall_mat
 
 
-def visondimer(n, shape_bool, pathlength=10,weightlist=[1]*6, xlog=False,\
+def vison_dimer_corr(n, shape_bool, pathlength=10,weightlist=[1]*6, xlog=False,\
                     verbose=True, plot=True, vert=True, colshift=0):
     '''
     Return vison and dimer correlators for 2x1 periodic triangular lattice
@@ -263,12 +263,12 @@ def visondimer(n, shape_bool, pathlength=10,weightlist=[1]*6, xlog=False,\
     if verbose:
         print(matcoords, len(matcoords))
     
-    kinvs = kinv_lu_sparse_large(n, kmat, shape_coord, matcoords=matcoords, \
+    Kinv_small = kinv_lu_sparse_large(n, kmat, matcoords=matcoords, \
                            verbose=False)
 
-    ksmall = kmat[np.ix_(matcoords, matcoords)].toarray()
+    K_small = kmat[np.ix_(matcoords, matcoords)].toarray()
 
-    v = [vison_large(n, ksmall, kinvs, length=l) for l in range(1,len(string))]
+    v = [vison_large(n, K_small, Kinv_small, length=l) for l in range(1,len(string))]
     # as noted in 'vison_large', length=l is actually the vison correlator at l-1
     # so v starts from face distance = 0
     if plot:
@@ -277,21 +277,21 @@ def visondimer(n, shape_bool, pathlength=10,weightlist=[1]*6, xlog=False,\
     # also compute dimer correlations
     d = []
     for i in range(2, len(string)):
-        corr = dimer_large(ksmall, kinvs, i)
+        corr = dimer_large(K_small, Kinv_small, i)
         d.append(corr)
     if plot:
         plot_points(d, xlog=xlog, title='dimers')
     
     return v, d
 
-def dimer_large(ksmall, kinvs, distance):
+def dimer_large(K_small, Kinv_small, distance):
     '''
     dimer-dimer correlator for the zigzag path on triangular lattice
     '''
     assert distance >= 2, 'distance must be \ge 2 for zigzag path'
-    pfaffian_term = -kinvs[0,distance]*kinvs[1,distance+1]+\
-        kinvs[0,distance+1]*kinvs[1,distance]    
-    return np.abs(pfaffian_term * ksmall[0,1] * ksmall[distance,distance+1])
+    pfaffian_term = -Kinv_small[0,distance]*Kinv_small[1,distance+1]+\
+        Kinv_small[0,distance+1]*Kinv_small[1,distance]    
+    return np.abs(pfaffian_term * K_small[0,1] * K_small[distance,distance+1])
 
 
 def kinv_corr(n, shape_bool, pathlength=10,weightlist=[1]*6, xlog=False,\
@@ -319,10 +319,10 @@ def kinv_corr(n, shape_bool, pathlength=10,weightlist=[1]*6, xlog=False,\
     if verbose:
         print(matcoords, len(matcoords))
     
-    kinvs = kinv_lu_sparse_large(n, kmat, shape_coord, matcoords=matcoords, \
+    Kinv_small = kinv_lu_sparse_large(n, kmat, matcoords=matcoords, \
                            verbose=False)
         
-    kicorr = kinvs[0,1:]
+    kicorr = Kinv_small[0,1:]
     # as noted in 'vison_large', length=l is actually the vison correlator at l-1
     # so v starts from face distance = 0
     if plot:
@@ -345,7 +345,7 @@ alist242=np.arange(2,4.1,.1)
 '''
 
 
-def save_visondimer(n, alist= [0.5,1,2.5,3,3.5,4,5], vert=True, colshift=0, \
+def save_vison_dimer(n, alist= [0.5,1,2.5,3,3.5,4,5], vert=True, colshift=0, \
             filepath='./', verbose=True):
     '''
     Calculate and save vison and dimer correlators for all a values in 'alist',
@@ -364,7 +364,7 @@ def save_visondimer(n, alist= [0.5,1,2.5,3,3.5,4,5], vert=True, colshift=0, \
         
     vstring = 'v' if vert else 'h'
     for a in alist:
-        v, d = visondimer(n,square_bool,n//2,[a,1,1,1,1,1],verbose=False,\
+        v, d = vison_dimer_corr(n,square_bool,n//2,[a,1,1,1,1,1],verbose=False,\
                              plot=False,vert=vert,colshift=colshift)
         np.save(filepath + 'tri_visons_n%i_a%.2f_%s_shift%i.npy'%(n,a,vstring,colshift), v)
         np.save(filepath + 'tri_dimers_n%i_a%.2f_%s_shift%i.npy'%(n,a,vstring,colshift), d)
@@ -374,11 +374,11 @@ def save_visondimer(n, alist= [0.5,1,2.5,3,3.5,4,5], vert=True, colshift=0, \
     
     return 0
 
-def load_visondimer(n, alist= [0.5,1,2.5,3,3.5,4,5], vert=True, colshift=0, filepath='./'):
+def load_vison_dimer(n, alist= [0.5,1,2.5,3,3.5,4,5], vert=True, colshift=0, filepath='./'):
     '''
     Load saved visons and dimers from folder 'filepath'. 
     
-    Options specify which files to load, same description as in 'save_vd'.
+    Options specify which files to load, same description as in 'save_vison_dimer'.
     Will throw an error if file doesn't exist.
     '''
     if filepath[-1] != '/':
@@ -434,7 +434,7 @@ def load_kinverse_vals(n, alist= [0.5,1,2.5,3,3.5,4,5], vert=True, colshift=0,\
     '''
     Load saved K^{-1} values from folder 'filepath'. 
     
-    Options specify which files to load, same description as in 'save_ki'.
+    Options specify which files to load, same description as in 'save_kinverse_vals'.
     Will throw an error if file doesn't exist.
     '''
     if filepath[-1] != '/':
@@ -466,10 +466,10 @@ def dimerplot_slopes(dlist, alist, pathlength, ymin=0, pt=14, savename='', \
 
     Parameters
     ----------
-    vlist : np.array. 
+    dlist : np.array. 
         The different rows correspond to different values of the parameter a
         in 'alist'.
-        Row i should be the vison correlator along the path, for parameter 
+        Row i should be the dimer-dimer correlator along the path, for parameter 
         value alist[i].
         
     alist : list of a values correponding to 'vlist'
@@ -688,7 +688,7 @@ def corr_lengths(n, alist, startslope=30, end=100, pt=18,\
     plt.rcParams["figure.figsize"] = (6.4,4.2)
     
     alist = np.sort(alist)
-    vlist,dlist=load_visondimer(n,alist=alist,filepath=filepath,vert=vert,\
+    vlist,dlist=load_vison_dimer(n,alist=alist,filepath=filepath,vert=vert,\
                                 colshift=colshift)
     
     dslopes = dimerplot_slopes(dlist, alist, end, startslope=startslope,end=end,\
@@ -736,19 +736,19 @@ def corr_lengths_all(n, list_of_alists, startslope=30, end=100, pt=16,\
     '''
     Plot correlation lengths along multiple paths all together.
     
-    list_of_alists order: verrtical shift=0, vertical shift=1, horizontal
+    list_of_alists order: vertical shift=0, vertical shift=1, horizontal=2
     '''
     
     plt.rcParams["figure.figsize"] = (6.4,figheight)
     
-    irange = [0,2]
+    irange = [0,2] # vertical and horizontal, skips vertical shift=1
     a_v0, a_v1, a_h = list_of_alists
     
-    vlist_v0, dlist_v0 = load_visondimer(n, np.sort(a_v0), filepath=filepath,\
+    vlist_v0, dlist_v0 = load_vison_dimer(n, np.sort(a_v0), filepath=filepath,\
                                          vert=True, colshift=0)
-    vlist_v1, dlist_v1 = load_visondimer(n, np.sort(a_v1), filepath=filepath,\
+    vlist_v1, dlist_v1 = load_vison_dimer(n, np.sort(a_v1), filepath=filepath,\
                                          vert=True, colshift=1)
-    vlist_h, dlist_h = load_visondimer(n, np.sort(a_h), filepath=filepath,vert=False)
+    vlist_h, dlist_h = load_vison_dimer(n, np.sort(a_h), filepath=filepath,vert=False)
     
     vlistlist = [vlist_v0, vlist_v1, vlist_h]
     dlistlist = [dlist_v0, dlist_v1, dlist_h]
@@ -763,9 +763,7 @@ def corr_lengths_all(n, list_of_alists, startslope=30, end=100, pt=16,\
     msize = [6,4,6]
     
     cmap = mpl.colormaps['plasma']
-    #colors = mpl.colormaps['plasma'](np.linspace(0,1,5))
     
-    #dcolors = [colors[0],colors[1],colors[1]]
     dcolors = ['blue', 'dodgerblue', cmap(.3)]
     dmshape = ["o", ".", "s"]
     dlabels = ['Dimers: vertical path', '', 'Dimers: horizontal path']
@@ -825,7 +823,7 @@ def corr_lengths_all(n, list_of_alists, startslope=30, end=100, pt=16,\
     return 0
 
 
-def corr_lengths_largea(n, alarge=np.concatenate((range(3,20),range(20,52,2))),\
+def corr_lengths_large_alpha(n, alarge=np.concatenate((range(3,20),range(20,52,2))),\
                         startslope=10, end=150, pt=16,\
                  savename='',save=False,filepath='./',quiet=True,\
                      legendloc='best', return_data=False):
@@ -835,9 +833,9 @@ def corr_lengths_largea(n, alarge=np.concatenate((range(3,20),range(20,52,2))),\
     
     plt.rcParams["figure.figsize"] = (6.4,4.2)
         
-    vlist_v0, dlist_v0 = load_visondimer(n, np.sort(alarge), filepath=filepath,\
+    vlist_v0, dlist_v0 = load_vison_dimer(n, np.sort(alarge), filepath=filepath,\
                                          vert=True, colshift=0)
-    vlist_h, dlist_h = load_visondimer(n, np.sort(alarge), filepath=filepath,\
+    vlist_h, dlist_h = load_vison_dimer(n, np.sort(alarge), filepath=filepath,\
                                        vert=False)
     
     vlistlist = [vlist_v0, vlist_h]
@@ -927,7 +925,7 @@ def kinvplot_slopes(kinvlist, alist, pathlength, ymin=0, pt=14, savename='', \
         Row i should be the K^{-1} values along the path, for parameter 
         value alist[i].
         
-    alist : list of a values correponding to 'vlist'
+    alist : list of a values correponding to 'kinvlist'
     pathlength : int, how many points to plot
     
     [optional parameters] See 'visonplot_slopes' description.
@@ -951,7 +949,8 @@ def kinvplot_slopes(kinvlist, alist, pathlength, ymin=0, pt=14, savename='', \
     if plot:
         markerlist = ["^","s","d", "x","o","v","*"]
         for i in range(num_a):
-            plt.plot(range(2,pathlength+2), kinvlist[i,:pathlength],label=r'$\alpha=%.2f$'%alist[i],\
+            plt.plot(range(2,pathlength+2), np.abs(kinvlist[i,:pathlength]),\
+                     label=r'$\alpha=%.2f$'%alist[i],\
                      marker=markerlist[i%len(markerlist)], linestyle='',fillstyle='none',\
                          color=colorlist[i%len(colorlist)])
         
@@ -991,7 +990,7 @@ def kinv_corr_lengths(n, alist, startslope=30, end=100, pt=18,\
     Plots inverse correlation lengths for K^{-1} as a function of parameter 'a' in 'alist'
     Plots vertical path and horizontal path (colshift=0)
     
-    Loads saved .npy dimer and vison correlator data.
+    Loads saved .npy K^{-1} data for vertical and horizontal paths with colshift=0.
 
     Parameters
     ----------
@@ -1003,9 +1002,6 @@ def kinv_corr_lengths(n, alist, startslope=30, end=100, pt=18,\
     savename : name to save figure to. If non-empty, will save even if 'save' is False.
     save : If True, save figure to file. If 'savename' is empty, will use a default name.
     filepath : path to dimer and vison .npy files.
-    vert : If True, will try to load files for vertical path. 
-           If False, will try to load files for horizontal path
-    colshift : lattice path shift amount, for files to load.
     plot : If False, will not plot intermediate dimer-dimer and vison correlator plots.
     return_data : If True, will return the best-fit slopes for dimers and visons
     '''
@@ -1015,10 +1011,10 @@ def kinv_corr_lengths(n, alist, startslope=30, end=100, pt=18,\
     kinvlist = load_kinverse_vals(n,alist=alist,filepath=filepath,vert=True, colshift=0)
     kinvlist_h = load_kinverse_vals(n,alist=alist,filepath=filepath,vert=False, colshift=0)
     
-    kinvslopes = kinvplot_slopes(kinvlist, alist, end, startslope=startslope,end=end,\
+    kinv_slopes = kinvplot_slopes(kinvlist, alist, end, startslope=startslope,end=end,\
                                ymin=0,plotslopes=True,showlegend=False,\
                                    plot=plot, matchcolor=False)
-    kinvslopes_h = kinvplot_slopes(kinvlist_h, alist, end, startslope=startslope,end=end,\
+    kinv_slopes_h = kinvplot_slopes(kinvlist_h, alist, end, startslope=startslope,end=end,\
                                ymin=0,plotslopes=True,showlegend=False,\
                                    plot=plot, matchcolor=False)
     plt.show()
@@ -1026,9 +1022,9 @@ def kinv_corr_lengths(n, alist, startslope=30, end=100, pt=18,\
     fig, ax = plt.subplots()
     cmap = mpl.colormaps['plasma']
 
-    ax.plot(alist, -np.array(kinvslopes), color='blue', marker='o',\
+    ax.plot(alist, -np.array(kinv_slopes), color='blue', marker='o',\
             fillstyle='none',label='Vertical path')
-    ax.plot(alist, -np.array(kinvslopes_h), color=cmap(.3), marker='s',\
+    ax.plot(alist, -np.array(kinv_slopes_h), color=cmap(.3), marker='s',\
             fillstyle='none',label='Horizontal path')    
 
     ax.set_ylabel('Inverse correlation length', fontsize=pt)
@@ -1053,7 +1049,7 @@ def kinv_corr_lengths(n, alist, startslope=30, end=100, pt=18,\
     plt.show()
     
     if return_data:
-        return kinvslopes
+        return kinv_slopes
     return 0
 
 #%% finite size scaling
@@ -1082,7 +1078,7 @@ def save_visons_fs(n, alist= [0.5,1,2.5,3,3.5,4,5], pathlengthmin=50, \
         
     vstring = 'v' if vert else 'h'
     for a in alist:
-        v, d = visondimer(n,square_bool,pathlength,[a,1,1,1,1,1],verbose=False,\
+        v, d = vison_dimer_corr(n,square_bool,pathlength,[a,1,1,1,1,1],verbose=False,\
                              plot=False,vert=vert,colshift=colshift)
         np.save(filepath + 'tri_visons_n%i_a%.2f_%s_shift%i.npy'%(n,a,vstring,colshift), v)
         np.save(filepath + 'tri_dimers_n%i_a%.2f_%s_shift%i.npy'%(n,a,vstring,colshift), d)
@@ -1121,7 +1117,7 @@ def load_visons_fs(nvals, alist, pathloc, filepath='./', vert=True):
     return vals
 
 
-def fs_scaling8(nvals, pathloc, filepath='./', beta=1., nu=1., pt=16,\
+def finite_size_scaling8(nvals, pathloc, filepath='./', beta=1., nu=1., pt=16,\
                 savename='',textloc=(-50,.5), vert=True):
     '''
     Finite-size scaling plot with all 8 values of \alpha
@@ -1171,10 +1167,10 @@ def fs_scaling8(nvals, pathloc, filepath='./', beta=1., nu=1., pt=16,\
 #%% utility
 
 def plot_shape_bool(n, shape_bool, string=[],numbering=False, weights=False, \
-               kmat='', axes=True, pt=16, edge_col='gray', kinv='',\
+               kmat=None, axes=True, pt=16, edge_col='gray', kinv='',\
                    orientation=False,colormap='viridis', title='', savename=''):
     '''
-    Draw the lattice and edges determined by 'shape_coord'.
+    Draw the lattice and edges determined by 'shape_bool'.
     
     'string': a list of edges [[(v1,v2),(v3,v4)], [(w1,w2),(w3,w4)], ...]
     that will be highlighted in the drawing
@@ -1183,7 +1179,7 @@ def plot_shape_bool(n, shape_bool, string=[],numbering=False, weights=False, \
     
     'weights': If True, label each edge with its weight from the Kasteleyn 
                matrix. (If 'kmat' is not supplied, the weights will be the
-                        uniform \pm 1 in the Kastleyn matrix)
+                        uniform \pm 1 in the Kasteleyn matrix)
         
     'kmat': Optional argument- If passed, this will be used for the Kasteleyn
             matrix. This is only useful with 'weights'=True, to plot non-uniform
@@ -1192,7 +1188,7 @@ def plot_shape_bool(n, shape_bool, string=[],numbering=False, weights=False, \
     Remember all plotting is backwards...i = vertical, j=horizontal,
     so for plt.plot, reverse the coords
     '''
-    kast = kmat if type(kmat) != str else kasteleyn_triangular_2x1(n, shape_bool)
+    kmat2 = kmat if kmat is not None else kasteleyn_triangular_2x1(n, shape_bool)
     xwidth, ywidth = n, n
     
     shape_coord = shape_coord_from_bool(n, shape_bool)
@@ -1211,7 +1207,7 @@ def plot_shape_bool(n, shape_bool, string=[],numbering=False, weights=False, \
                 for neighbor in [(i+1,j),(i,j+1),(i+1,j+1)]:
                     if is_in_shape(n, neighbor[0], neighbor[1], shape_coord):
                         nematcoord = shape_coord(n,*neighbor)
-                        kval = kast[coord, nematcoord]
+                        kval = kmat2[coord, nematcoord]
                         if kval != 0:
                             edge_colors.append(edge_col)
                             line_segments.append([(j,i),(neighbor[1],neighbor[0])])
@@ -1242,7 +1238,6 @@ def plot_shape_bool(n, shape_bool, string=[],numbering=False, weights=False, \
     ax.set_aspect("equal")
     
     # draw lattice edges
-    #print(line_segments)
     line_collection = LineCollection(line_segments, colors=edge_colors, linewidths=edgewidth)
     ax.add_collection(line_collection)
     

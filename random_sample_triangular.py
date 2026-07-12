@@ -12,7 +12,7 @@ from matplotlib.collections import LineCollection
 
 from kasteleyn_triangular import *
 
-def gen_rectangle_bool(ratio):
+def make_rectangle_bool(ratio):
     '''
     Return a shape_bool function lambda n,i,j: ...
     for a rectangle shape with height ratio*n (0<ratio\le1)
@@ -22,14 +22,6 @@ def gen_rectangle_bool(ratio):
             return True
         return False
     return rshape
-
-def rectangle_bool(n,i,j):
-    '''
-    rectangle shape, half the height of square to save space
-    '''
-    if i in range(n//2) and j in range(n):
-        return True
-    return False
 
 def kasteleyn_triangular_2x1_lil(n, shape_bool, weightlist=[1]*6, dtype=float):
     '''    
@@ -130,7 +122,7 @@ def random_covering(n, shape_bool, weights=[1]*6):
 
                     if np.sum(cprob) < 0.99: # shouldn't ever be an issue
                         print(np.sum(cprob),cprob)
-                        plot_cover(n, cover)
+                        plot_cover(n, shape_bool, cover)
                     else:
                         cprob = cprob / np.sum(cprob)
                     # select dimer
@@ -207,15 +199,15 @@ def plot_cover(n, shape_bool, cover, axes=False):
 
 
 def plot_2covers(n, shape_bool, cover1, cover2, axes=False, savename='',\
-                 loopcolor='k', decolor='darkgrey', dewidth=.5):
+                 loopcolor='k', double_edge_color='darkgrey', double_edge_width=.5):
     '''
     Draw the two covers (overlayed) described by 'cover1' and 'cover2'
     (e.g. output from 'random_covering')
     
     OPTIONS:
         loopcolor - loop color
-        decolor - double edge color
-        dewith - width of double edges
+        double_edge_color - double edge color
+        double_edge_width - width of double edges
     '''
     step_list = [(1,0),(1,1),(0,1),(-1,0),(-1,-1),(0,-1)]
 
@@ -257,8 +249,9 @@ def plot_2covers(n, shape_bool, cover1, cover2, axes=False, savename='',\
     loop_collection = LineCollection(loop_segments, linewidths=.8, colors=loopcolor)
     ax.add_collection(loop_collection)
     
-    de_collection = LineCollection(double_edges, linewidths=dewidth, colors=decolor)
-    ax.add_collection(de_collection)
+    double_edge_collection = LineCollection(double_edges, \
+                        linewidths=double_edge_width, colors=double_edge_color)
+    ax.add_collection(double_edge_collection)
     
     if savename != '':
         plt.savefig(savename, bbox_inches='tight')
